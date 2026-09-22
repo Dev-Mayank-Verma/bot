@@ -2,6 +2,10 @@ import logging
 import sqlite3
 import asyncio
 import os
+
+# Render par runtime par browser missing na ho, isliye yeh ensure karega
+os.system("playwright install chromium")
+
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message
 from aiogram.fsm.state import StatesGroup, State
@@ -191,8 +195,8 @@ async def process_domain(message: Message, state: FSMContext):
 
             await status_msg.edit_text(f"✅ `{domain_name}` available hai! Cart mein add karke coupon apply kiya ja raha hai...")
 
-            # --- Checkout & Purchase Steps (Cart -> Coupon -> Details -> PayPal) ---
-            await asyncio.sleep(5) # Simulation step
+            # --- Checkout & Purchase Steps ---
+            await asyncio.sleep(5)
 
             await browser.close()
 
