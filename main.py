@@ -73,10 +73,11 @@ async def process_lastname(message: Message, state: FSMContext):
     await state.set_state(DomainPurchaseStates.waiting_for_email)
 
 @router.message(DomainPurchaseStates.waiting_for_email)
-async def process_email(message: Message, state: FSM Years): # type: ignore
+async def process_email(message: Message, state: FSMContext):
     await state.update_data(email=message.text.strip())
     await message.answer("Ab apna Street Address daliye:")
-    await state.set_state(DomainManager := DomainPurchaseStates.waiting_for_address) # type: ignore
+    await state.set_state(DomainPurchaseStates.waiting_for_address)
+
 
 @router.message(DomainPurchaseStates.waiting_for_address)
 async def process_address(message: Message, state: FSMContext):
