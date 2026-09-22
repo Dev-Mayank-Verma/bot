@@ -1,0 +1,2 @@
+# Bot Configuration
+BOT_TOKEN = "8448388628:AAFkeSDBJmJDxAosODnAlJPQ37R517sZt_M"
