@@ -2,10 +2,6 @@ import logging
 import sqlite3
 import asyncio
 import os
-
-# Render par runtime par browser missing na ho, isliye yeh ensure karega
-os.system("playwright install chromium")
-
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message
 from aiogram.fsm.state import StatesGroup, State
@@ -16,7 +12,7 @@ from playwright.async_api import async_playwright
 # Logging setup
 logging.basicConfig(level=logging.INFO)
 
-# Token configuration (Render environment variable se uthayega)
+# Token configuration
 BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 
 bot = Bot(token=BOT_TOKEN)
@@ -114,7 +110,6 @@ async def process_zip(message: Message, state: FSMContext):
 async def process_phone(message: Message, state: FSMContext):
     data = await state.get_data()
     
-    # Save to SQLite Database
     conn = sqlite3.connect("users.db")
     cursor = conn.cursor()
     cursor.execute("""
@@ -149,7 +144,6 @@ async def process_domain(message: Message, state: FSMContext):
 
     user_id = message.from_user.id
 
-    # Database se user details fetch karna
     conn = sqlite3.connect("users.db")
     cursor = conn.cursor()
     cursor.execute("SELECT username, password, email, address, city, state, zip_code, phone FROM user_data WHERE user_id = ?", (user_id,))
@@ -166,26 +160,21 @@ async def process_domain(message: Message, state: FSMContext):
 
     try:
         async with async_playwright() as p:
-            # Render ke liye zaroori sandbox args ke sath browser launch
             browser = await p.chromium.launch(
                 headless=True,
                 args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
             )
             page = await browser.new_page()
 
-            # Gen.xyz par jaana
             await page.goto("https://gen.xyz/", timeout=60000)
             
-            # Domain search input box locate karna aur domain enter karna
             search_input = "input[type='text'], input[placeholder*='domain']"
             await page.wait_for_selector(search_input, timeout=10000)
             await page.fill(search_input, domain_name)
             await page.press(search_input, "Enter")
 
-            # Result load hone ka wait
             await asyncio.sleep(4)
 
-            # --- AVAILABILITY CHECK ---
             page_content = await page.content()
             if "taken" in page_content.lower() or "unavailable" in page_content.lower():
                 await browser.close()
@@ -194,10 +183,7 @@ async def process_domain(message: Message, state: FSMContext):
                 return
 
             await status_msg.edit_text(f"✅ `{domain_name}` available hai! Cart mein add karke coupon apply kiya ja raha hai...")
-
-            # --- Checkout & Purchase Steps ---
             await asyncio.sleep(5)
-
             await browser.close()
 
         await status_msg.edit_text(f"🎉 Success! `{domain_name}` ke liye automation process complete ho gaya hai.")
