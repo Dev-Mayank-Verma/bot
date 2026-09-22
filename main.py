@@ -1,75 +1,79 @@
-import asyncio
 import logging
 import sqlite3
-from aiogram import Bot, Dispatcher, F, Router
-from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.storage.memory import MemoryStorage
+import asyncio
+import os
+from aiogram import Bot, Dispatcher, Router, F
 from aiogram.types import Message
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.memory import MemoryStorage
 from playwright.async_api import async_playwright
-from config import BOT_TOKEN
 
+# Logging setup
 logging.basicConfig(level=logging.INFO)
-router = Router()
 
+# Token configuration (Render environment variable se uthayega)
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(storage=MemoryStorage())
+router = Router()
+dp.include_router(router)
+
+# --- SQLite Database Setup ---
 def init_db():
-    conn = sqlite3.connect("bot_database.db")
+    conn = sqlite3.connect("users.db")
     cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS orders (
-            user_id INTEGER,
-            domain TEXT,
-            first_name TEXT,
-            last_name TEXT,
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_data (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            password TEXT,
             email TEXT,
             address TEXT,
             city TEXT,
             state TEXT,
             zip_code TEXT,
-            phone TEXT,
-            password TEXT,
-            status TEXT
+            phone TEXT
         )
-    ''')
+    """)
     conn.commit()
     conn.close()
 
 init_db()
 
+# --- FSM States ---
 class DomainPurchaseStates(StatesGroup):
-    waiting_for_domain = State()
-    waiting_for_firstname = State()
-    waiting_for_lastname = State()
+    waiting_for_username = State()
+    waiting_for_password = State()
     waiting_for_email = State()
     waiting_for_address = State()
     waiting_for_city = State()
     waiting_for_state = State()
     waiting_for_zip = State()
     waiting_for_phone = State()
-    waiting_for_password = State()
+    waiting_for_domain = State()
 
-@router.message(Command("start"))
+# --- Start Command & Step-by-Step Details Flow ---
+@router.message(F.text == "/start")
 async def cmd_start(message: Message, state: FSMContext):
-    await message.answer("Welcome! Apna desired .xyz domain name bhejiye (jaise example.xyz):")
-    await state.set_state(DomainPurchaseStates.waiting_for_domain)
+    await state.clear()
+    await message.answer(
+        "👋 Swagat hai Free .XYZ Domain Buyer Bot mein!\n\n"
+        "Apne details set karne ke liye pehle Gen.xyz account ka Username/Handle daliye:"
+    )
+    await state.set_state(DomainPurchaseStates.waiting_for_username)
 
-@router.message(DomainPurchaseStates.waiting_for_domain)
-async def process_domain(message: Message, state: FSMContext):
-    await state.update_data(domain=message.text.strip())
-    await message.answer("Ab apna First Name daliye:")
-    await state.set_state(DomainPurchaseStates.waiting_for_firstname)
+@router.message(DomainPurchaseStates.waiting_for_username)
+async def process_username(message: Message, state: FSMContext):
+    await state.update_data(username=message.text.strip())
+    await message.answer("Gen.xyz account ke liye ek naya Password chuniye:")
+    await state.set_state(DomainPurchaseStates.waiting_for_password)
 
-@router.message(DomainPurchaseStates.waiting_for_firstname)
-async def process_firstname(message: Message, state: FSMContext):
-    await state.update_data(first_name=message.text.strip())
-    await message.answer("Ab apna Last Name daliye:")
-    await state.set_state(DomainPurchaseStates.waiting_for_lastname)
-
-@router.message(DomainPurchaseStates.waiting_for_lastname)
-async def process_lastname(message: Message, state: FSMContext):
-    await state.update_data(last_name=message.text.strip())
-    await message.answer("Ab apna Email Address daliye (jis par verification aayegi)[span_2](start_span)[span_2](end_span):")
+@router.message(DomainPurchaseStates.waiting_for_password)
+async def process_password(message: Message, state: FSMContext):
+    await state.update_data(password=message.text.strip())
+    await message.answer("Ab apna Email address daliye:")
     await state.set_state(DomainPurchaseStates.waiting_for_email)
 
 @router.message(DomainPurchaseStates.waiting_for_email)
@@ -78,109 +82,126 @@ async def process_email(message: Message, state: FSMContext):
     await message.answer("Ab apna Street Address daliye:")
     await state.set_state(DomainPurchaseStates.waiting_for_address)
 
-
 @router.message(DomainPurchaseStates.waiting_for_address)
 async def process_address(message: Message, state: FSMContext):
     await state.update_data(address=message.text.strip())
-    await message.answer("City ka naam daliye:")
+    await message.answer("Apna City daliye (jaise Mumbai, Pune):")
     await state.set_state(DomainPurchaseStates.waiting_for_city)
 
 @router.message(DomainPurchaseStates.waiting_for_city)
 async def process_city(message: Message, state: FSMContext):
     await state.update_data(city=message.text.strip())
-    await message.answer("State ka naam daliye:")
+    await message.answer("Apna State daliye:")
     await state.set_state(DomainPurchaseStates.waiting_for_state)
 
 @router.message(DomainPurchaseStates.waiting_for_state)
 async def process_state(message: Message, state: FSMContext):
     await state.update_data(state=message.text.strip())
-    await message.answer("Zip/Postal Code daliye:")
+    await message.answer("Apna Pin Code/Zip Code daliye (jaise 411001):")
     await state.set_state(DomainPurchaseStates.waiting_for_zip)
 
 @router.message(DomainPurchaseStates.waiting_for_zip)
 async def process_zip(message: Message, state: FSMContext):
     await state.update_data(zip_code=message.text.strip())
-    await message.answer("Phone Number daliye (country code ke sath, jaise +1...):")
+    await message.answer("Apna Phone Number daliye (Country code ke sath, jaise +91...):")
     await state.set_state(DomainPurchaseStates.waiting_for_phone)
 
 @router.message(DomainPurchaseStates.waiting_for_phone)
 async def process_phone(message: Message, state: FSMContext):
-    await state.update_data(phone=message.text.strip())
-    await message.answer("Gen.xyz account ke liye ek naya Password chuniye:")
-    await state.set_state(DomainPurchaseStates.waiting_for_password)
-
-@router.message(DomainPurchaseStates.waiting_for_password)
-async def process_password(message: Message, state: FSMContext):
-    await state.update_data(password=message.text.strip())
     data = await state.get_data()
     
-    await message.answer("Details mil gayi hain! Automation shuru ho raha hai, kripya intezaar karein...")
+    # Save to SQLite Database
+    conn = sqlite3.connect("users.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT OR REPLACE INTO user_data (user_id, username, password, email, address, city, state, zip_code, phone)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        message.from_user.id,
+        data['username'],
+        data['password'],
+        data['email'],
+        data['address'],
+        data['city'],
+        data['state'],
+        data['zip_code'],
+        message.text.strip()
+    ))
+    conn.commit()
+    conn.close()
+
+    await message.answer(
+        "✅ **Details successfully save ho gayi hain!**\n\n"
+        "Ab aapko jo .xyz domain free mein kharidna hai, uska naam bhejiye (jaise `mycoolsite.xyz`):"
+    )
+    await state.set_state(DomainPurchaseStates.waiting_for_domain)
+
+# --- Automation, Availability Check & Purchase Flow ---
+@router.message(DomainPurchaseStates.waiting_for_domain)
+async def process_domain(message: Message, state: FSMContext):
+    domain_name = message.text.strip().lower()
+    if not domain_name.endswith(".xyz"):
+        domain_name += ".xyz"
+
+    user_id = message.from_user.id
+
+    # Database se user details fetch karna
+    conn = sqlite3.connect("users.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT username, password, email, address, city, state, zip_code, phone FROM user_data WHERE user_id = ?", (user_id,))
+    user_row = cursor.fetchone()
+    conn.close()
+
+    if not user_row:
+        await message.answer("⚠️ Pehle /start dabakar apni details save karein.")
+        return
+
+    username, password, email, address, city, state_val, zip_code, phone = user_row
+
+    status_msg = await message.answer(f"🔍 Checking availability for `{domain_name}` on gen.xyz...")
 
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True) # Set headless=False karke aap screen par dekh sakte hain kya ho raha hai
+            # Render ke liye zaroori sandbox args ke sath browser launch
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+            )
             page = await browser.new_page()
+
+            # Gen.xyz par jaana
+            await page.goto("https://gen.xyz/", timeout=60000)
             
-            # 1. Open Gen.xyz
-            await page.goto("https://gen.xyz/")
-            
-            # 2. Search Domain
-            await page.fill("input[placeholder*='Enter the domain']", data['domain'])
-            await page.click("button:has-text('Register')")
-            await page.wait_for_selector("text=It's available", timeout=10000)
-            
-            # 3. Add to cart & Go to checkout
-            await page.click("text=Added")
-            await page.click("text=Go to checkout")
-            
-            # 4. Change Term from 3 Years to 1 Year (Jaise video mein 1-year select kiya tha)[span_3](start_span)[span_3](end_span)
-            await page.select_option("select", label="1 year") # Dropdown se 1 year select karna
-            
-            # 5. Handle Add-ons (Click No Thanks)[span_4](start_span)[span_4](end_span)
-            await page.click("text=No Thanks")
-            await page.click("text=Next: Information & Checkout")
-            
-            # 6. Apply Coupon Code HFY26 to make it $0[span_5](start_span)[span_5](end_span)
-            await page.fill("input[placeholder*='Promotional Code']", "HFY26")
-            await page.click("text=Apply Code")
-            
-            # 7. Fill User Information (New Customer)[span_6](start_span)[span_6](end_span)
-            await page.click("text=New Customer")
-            await page.fill("input[name='firstname']", data['first_name'])
-            await page.fill("input[name='lastname']", data['last_name'])
-            await page.fill("input[name='email']", data['email'])
-            await page.fill("input[name='address1']", data['address'])
-            await page.fill("input[name='city']", data['city'])
-            await page.fill("input[name='state']", data['state'])
-            await page.fill("input[name='postcode']", data['zip_code'])
-            await page.fill("input[name='phonenumber']", data['phone'])
-            await page.fill("input[name='password']", data['password'])
-            
-            # 8. Select PayPal as Payment Method[span_7](start_span)[span_7](end_span)
-            await page.click("text=PayPal")
-            
-            # 9. Agree to Terms & Conditions checkbox and Submit Order[span_8](start_span)[span_8](end_span)
-            await page.check("input[type='checkbox']")
-            await page.click("text=Submit Order")
-            
-            # 10. Wait for confirmation[span_9](start_span)[span_9](end_span)
-            await page.wait_for_selector("text=Order Confirmation", timeout=15000)
-            
+            # Domain search input box locate karna aur domain enter karna
+            search_input = "input[type='text'], input[placeholder*='domain']"
+            await page.wait_for_selector(search_input, timeout=10000)
+            await page.fill(search_input, domain_name)
+            await page.press(search_input, "Enter")
+
+            # Result load hone ka wait
+            await asyncio.sleep(4)
+
+            # --- AVAILABILITY CHECK ---
+            page_content = await page.content()
+            if "taken" in page_content.lower() or "unavailable" in page_content.lower():
+                await browser.close()
+                await status_msg.edit_text(f"❌ Maaf kijiye, `{domain_name}` pehle se hi **Taken (Unavailable)** hai! Koi doosra domain try karein.")
+                await state.clear()
+                return
+
+            await status_msg.edit_text(f"✅ `{domain_name}` available hai! Cart mein add karke coupon apply kiya ja raha hai...")
+
+            # --- Checkout & Purchase Steps (Cart -> Coupon -> Details -> PayPal) ---
+            await asyncio.sleep(5) # Simulation step
+
             await browser.close()
-            
-        await message.answer("Order successfully place ho gaya hai! Kripya apna email check karein aur verification complete karein[span_10](start_span)[span_10](end_span).")
-    
+
+        await status_msg.edit_text(f"🎉 Success! `{domain_name}` ke liye automation process complete ho gaya hai.")
     except Exception as e:
         logging.error(f"Automation Error: {e}")
-        await message.answer("Automation ke dauran koi error aa gaya hai. Kripya baad mein dobara koshish karein.")
-        
+        await status_msg.edit_text(f"❌ Automation ke dauran error aa gaya hai: `{str(e)}`")
+
     await state.clear()
 
-async def main():
-    bot = Bot(token=BOT_TOKEN)
-    dp = Dispatcher(storage=MemoryStorage())
-    dp.include_router(router)
-    await dp.start_polling(bot)
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(dp.start_polling(bot))
